@@ -75,7 +75,22 @@ func (c *Controller) Start(ctx context.Context, id string) (cin sandbox.Controll
 		labels = map[string]string{}
 	)
 
-	sandboxImage := c.getSandboxImageName()
+	ociRuntime, err := c.config.GetSandboxRuntime(config, metadata.RuntimeHandler)
+	if err != nil {
+		return cin, fmt.Errorf("failed to get sandbox runtime: %w", err)
+	}
+	log.G(ctx).WithField("podsandboxid", id).Debugf("use OCI runtime %+v", ociRuntime)
+
+	labels["oci_runtime_type"] = ociRuntime.Type
+
+	var sandboxImage string
+	switch ociRuntime.Snapshotter {
+	case "overlaybd":
+		sandboxImage = "registry.hub.docker.com/hatf0/pause:3.9_obd"
+	default:
+		sandboxImage = c.getSandboxImageName()
+	}
+
 	// Ensure sandbox container image snapshot.
 	image, err := c.ensureImageExists(ctx, sandboxImage, config, metadata.RuntimeHandler)
 	if err != nil {
@@ -87,17 +102,9 @@ func (c *Controller) Start(ctx context.Context, id string) (cin sandbox.Controll
 		return cin, fmt.Errorf("failed to get image from containerd %q: %w", image.ID, err)
 	}
 
-	ociRuntime, err := c.config.GetSandboxRuntime(config, metadata.RuntimeHandler)
-	if err != nil {
-		return cin, fmt.Errorf("failed to get sandbox runtime: %w", err)
-	}
-	log.G(ctx).WithField("podsandboxid", id).Debugf("use OCI runtime %+v", ociRuntime)
-
-	labels["oci_runtime_type"] = ociRuntime.Type
-
 	// Create sandbox container root directories.
 	sandboxRootDir := c.getSandboxRootDir(id)
-	if err := c.os.MkdirAll(sandboxRootDir, 0755); err != nil {
+	if err := c.os.MkdirAll(sandboxRootDir, 0o755); err != nil {
 		return cin, fmt.Errorf("failed to create sandbox root directory %q: %w",
 			sandboxRootDir, err)
 	}
@@ -112,7 +119,7 @@ func (c *Controller) Start(ctx context.Context, id string) (cin sandbox.Controll
 	}()
 
 	volatileSandboxRootDir := c.getVolatileSandboxRootDir(id)
-	if err := c.os.MkdirAll(volatileSandboxRootDir, 0755); err != nil {
+	if err := c.os.MkdirAll(volatileSandboxRootDir, 0o755); err != nil {
 		return cin, fmt.Errorf("failed to create volatile sandbox root directory %q: %w",
 			volatileSandboxRootDir, err)
 	}
