@@ -36,6 +36,7 @@ import (
 	"github.com/containerd/imgcrypt/v2"
 	"github.com/containerd/imgcrypt/v2/images/encryption"
 	"github.com/containerd/log"
+	"github.com/davecgh/go-spew/spew"
 	distribution "github.com/distribution/reference"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -785,8 +786,10 @@ func (c *CRIImageService) snapshotterFromPodSandboxConfig(ctx context.Context, i
 ) (string, error) {
 	snapshotter := c.config.Snapshotter
 
+	log.G(ctx).Infof("PullImage: got runtimeHandler %s", runtimeHandler)
+
 	if runtimeHandler == "" {
-		if s == nil || s.Annotations == nil {
+		if s == nil {
 			return snapshotter, nil
 		}
 		// TODO(kiashok): honor the new CRI runtime handler field added to v0.29.0
@@ -798,10 +801,10 @@ func (c *CRIImageService) snapshotterFromPodSandboxConfig(ctx context.Context, i
 		return snapshotter, nil
 	}
 
-	log.G(ctx).Infof("PullImage: got runtimeHandler %s", runtimeHandler)
-
 	// TODO: Ensure error is returned if runtime not found?
 	if c.runtimePlatforms != nil {
+		log.G(ctx).Infof("snapshotterFromPodSandboxConfig: %s", spew.Sprint(c.runtimePlatforms))
+
 		if p, ok := c.runtimePlatforms[runtimeHandler]; ok && p.Snapshotter != snapshotter {
 			snapshotter = p.Snapshotter
 			log.G(ctx).Infof("experimental: PullImage %q for runtime %s, using snapshotter %s", imageRef, runtimeHandler, snapshotter)
